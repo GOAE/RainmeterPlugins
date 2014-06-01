@@ -91,7 +91,6 @@ bool CWMIService::Connect(LPCWSTR wmi_namespace)
     locator->Release();
 	}
 
-	//RmLog(0, L"WMI.dll: Connected to WMI");
 	return true;
 }
 
