@@ -82,73 +82,69 @@ void EnqueueForUpdate(Measure *m)
 	g_cv.notify_one();
 }
 
-extern "C" {
-
-	PLUGIN_EXPORT void Initialize(void** data, void* rm) {
-		if (g_measuresCnt == 0) // first time initialization
-		{
-			// start WMI query thread
-			// waits for main thread to put Measures on g_queue for processing
-			g_worker.swap(std::thread(QueryWorker));
-		}
-		Measure* measure = new Measure;
-		measure->valueMutex = new std::mutex;
-		*data = measure;
-		++g_measuresCnt;
+PLUGIN_EXPORT void Initialize(void** data, void* rm) {
+	if (g_measuresCnt == 0) // first time initialization
+	{
+		// start WMI query thread
+		// waits for main thread to put Measures on g_queue for processing
+		g_worker.swap(std::thread(QueryWorker));
 	}
+	Measure* measure = new Measure;
+	measure->valueMutex = new std::mutex;
+	*data = measure;
+	++g_measuresCnt;
+}
 
-	PLUGIN_EXPORT void Reload(void* data, void* rm, double* maxValue) {
-		Measure* measure = (Measure*)data;
-		measure->refreshInterval = RmReadInt(rm, L"Refresh", 60);
-		measure->query = RmReadString(rm, L"Query", L"");
-		measure->lastUpdate = 0;
+PLUGIN_EXPORT void Reload(void* data, void* rm, double* maxValue) {
+	Measure* measure = (Measure*)data;
+	measure->refreshInterval = RmReadInt(rm, L"Refresh", 60);
+	measure->query = RmReadString(rm, L"Query", L"");
+	measure->lastUpdate = 0;
+}
+
+PLUGIN_EXPORT double Update(void* data) {
+	Measure* m = (Measure*)data;
+	DWORD now = ::GetTickCount() / 1000;
+	if (now - m->lastUpdate >= m->refreshInterval) {
+		Measure copy = *m;
+		EnqueueForUpdate(m);
+		m->lastUpdate = now;
+		m = &copy;
 	}
+	if (m->type == eNum)
+		return m->dblResult;
+	return 0.0;
+}
 
-	PLUGIN_EXPORT double Update(void* data) {
-		Measure* m = (Measure*)data;
-		DWORD now = ::GetTickCount() / 1000;
-		if (now - m->lastUpdate >= m->refreshInterval) {
-			Measure copy = *m;
-			EnqueueForUpdate(m);
-			m->lastUpdate = now;
-			m = &copy;
-		}
-		if (m->type == eNum)
-			return m->dblResult;
-		return 0.0;
+PLUGIN_EXPORT LPCWSTR GetString(void* data) {
+	Measure* measure = (Measure*)data;
+	{
+		std::unique_lock<std::mutex> lg(*measure->valueMutex);
+		if (measure->type == eString)
+			measure->strResult2 = measure->strResult.c_str();
+		else
+			measure->strResult2 = L"";
 	}
+	return measure->strResult2.c_str();
+}
 
-	PLUGIN_EXPORT LPCWSTR GetString(void* data) {
-		Measure* measure = (Measure*)data;
-		{
-			std::unique_lock<std::mutex> lg(*measure->valueMutex);
-			if (measure->type == eString)
-				measure->strResult2 = measure->strResult.c_str();
-			else
-				measure->strResult2 = L"";
-		}
-		return measure->strResult2.c_str();
+//PLUGIN_EXPORT void ExecuteBang(void* data, LPCWSTR args)
+//{
+//Measure* measure = (Measure*)data;
+//}
+
+PLUGIN_EXPORT void Finalize(void* data) {
+	Measure* measure = (Measure*)data;
+	delete measure->valueMutex;
+	delete measure;
+	--g_measuresCnt;
+	// no more wmi measures, release helper
+	if (g_measuresCnt == 0) {
+		// stop queue thread
+		g_run = false;
+		g_cv.notify_one();
+		g_worker.join();
 	}
-
-	//PLUGIN_EXPORT void ExecuteBang(void* data, LPCWSTR args)
-	//{
-	//Measure* measure = (Measure*)data;
-	//}
-
-	PLUGIN_EXPORT void Finalize(void* data) {
-		Measure* measure = (Measure*)data;
-		delete measure->valueMutex;
-		delete measure;
-		--g_measuresCnt;
-		// no more wmi measures, release helper
-		if (g_measuresCnt == 0) {
-			// stop queue thread
-			g_run = false;
-			g_cv.notify_one();
-			g_worker.join();
-		}
-	}
-
 }
 
 
