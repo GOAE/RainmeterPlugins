@@ -12,6 +12,9 @@
 #include <comdef.h>
 #include <Wbemidl.h>
 #include <string>
+#include <stdio.h>
+#include <wchar.h>
+#include <mutex>
 
 enum EResultType { eString, eNum };
 
