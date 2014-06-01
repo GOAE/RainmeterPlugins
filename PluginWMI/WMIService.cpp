@@ -91,6 +91,7 @@ bool CWMIService::Connect(LPCWSTR wmi_namespace)
     locator->Release();
 	}
 
+	//RmLog(0, L"WMI.dll: Connected to WMI");
 	return true;
 }
 
@@ -155,8 +156,7 @@ bool CWMIService::Exec(const std::wstring &wmi_query,
 			break;
 
 		VARIANT vtProp;
-		::VariantInit(&vtProp);
-		hr = clsObj->Get(propName, 0, &vtProp, 0, 0);			
+		hr = clsObj->Get(propName, 0, &vtProp, 0, 0L);			
 		::SysFreeString(propName);
 
 		if (FAILED(hr))
@@ -173,18 +173,28 @@ bool CWMIService::Exec(const std::wstring &wmi_query,
 			case VT_I1:
 			case VT_I2:
 			case VT_I4:
-			case VT_I8:
-				type = eNum;
-				dblResult = (double)vtProp.intVal;
-				break;
+			case VT_I8: {
+				wchar_t buf[24];
+				swprintf((wchar_t*)&buf, 24, L"%i", vtProp.intVal);
+				type = eString;
+				strResult = (wchar_t*)&buf;
+				} break;
 			case VT_BSTR:
 				type = eString;
 				strResult = vtProp.bstrVal;
 				break;
-			case VT_R4:
-			case VT_R8:
-				type = eNum;
-				dblResult = vtProp.dblVal;
+			case VT_R4: {
+				wchar_t buf[24];
+				swprintf((wchar_t*)&buf, 24, L"%.1f", vtProp.fltVal);
+				type = eString;
+				strResult = (wchar_t*)&buf;
+				} break;
+			case VT_R8: {
+				wchar_t buf[24];
+				swprintf((wchar_t*)&buf, 24, L"%.1f", vtProp.dblVal);
+				type = eString;
+				strResult = (wchar_t*)&buf;
+				} break;
 			case VT_BOOL:
 				type = eString;
 				// XXX maybe map to 1/0 instead of strings?
@@ -194,6 +204,7 @@ bool CWMIService::Exec(const std::wstring &wmi_query,
 				type = eString;
 				_ASSERT(false);
 				strResult =  L"#TypeUnknown"; // just to know that we've got unhandled type
+				RmLog(0, L"WMI.dll: Unknown returned type from Exec");
 			}
 		}
 		::VariantClear(&vtProp);
