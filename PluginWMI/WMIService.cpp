@@ -190,7 +190,7 @@ bool CWMIService::Exec(const std::wstring &wmi_query,
 				} break;
 			case VT_R8: {
 				wchar_t buf[24];
-				swprintf((wchar_t*)&buf, 24, L"%.1f", vtProp.dblVal);
+				swprintf((wchar_t*)&buf, 24, L"%.1d", vtProp.dblVal);
 				type = eString;
 				strResult = (wchar_t*)&buf;
 				} break;
